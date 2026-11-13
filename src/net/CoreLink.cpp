@@ -44,6 +44,10 @@ void CoreLink::begin(const String &host, uint16_t port) {
 }
 
 void CoreLink::loop() {
+  if (!started_) {
+    return;
+  }
+
   socket_.loop();
 }
 
@@ -54,6 +58,10 @@ void CoreLink::rebind() {
 
   socket_.disconnect();
   started_ = false;
+
+  // Кадры прежнего соединения больше не описывают текущую сеть: иначе панель
+  // ещё LINK_TIMEOUT_MS показывала бы карту от старого ядра.
+  telemetry_.valid = false;
 }
 
 bool CoreLink::connected() {
@@ -131,7 +139,16 @@ void CoreLink::handleEvent(WStype_t type, uint8_t *payload, size_t length) {
 }
 
 void CoreLink::handleFrame(const char *payload, size_t length) {
-  if (payload == nullptr || length == 0 || length >= sizeof(g_frameBuffer)) {
+  if (payload == nullptr || length == 0) {
+    return;
+  }
+
+  // Кадр, который не влез в буфер, иначе терялся бы молча: панель гасла бы без
+  // единой строки в логе, и причину пришлось бы искать наугад.
+  if (length >= sizeof(g_frameBuffer)) {
+    Serial.printf("CORE: кадр %u байт не влез в %u — увеличьте g_frameBuffer\n",
+                  static_cast<unsigned>(length),
+                  static_cast<unsigned>(sizeof(g_frameBuffer)));
     return;
   }
 
@@ -144,6 +161,8 @@ void CoreLink::handleFrame(const char *payload, size_t length) {
   JsonObject &root = g_jsonBuffer.parseObject(g_frameBuffer);
 
   if (!root.success()) {
+    Serial.printf("CORE: кадр %u байт не разобран — проверьте g_jsonBuffer\n",
+                  static_cast<unsigned>(length));
     return;
   }
 
@@ -171,13 +190,17 @@ void CoreLink::handleFrame(const char *payload, size_t length) {
     const char *password = data["pass"];
     const char *host = data["host"];
 
-    if (ssid == nullptr || password == nullptr) {
+    // Пустые поля — это недописанное ядро, а не новые настройки: сохранив их,
+    // модуль потерял бы связь до пересопряжения.
+    if (ssid == nullptr || ssid[0] == '\0' || password == nullptr || password[0] == '\0') {
+      Serial.println("CORE: пустые параметры сети — пропущено");
       return;
     }
 
     pendingSsid_ = ssid;
     pendingPassword_ = password;
-    pendingHost_ = host != nullptr ? String(host) : host_;
+    // Пустой host в кадре означает «адрес не менялся».
+    pendingHost_ = (host != nullptr && host[0] != '\0') ? String(host) : host_;
     pendingPort_ = static_cast<uint16_t>(data["port"] | CORE_DEFAULT_PORT);
     hasPendingCredentials_ = true;
 
