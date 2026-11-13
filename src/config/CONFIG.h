@@ -35,6 +35,11 @@ constexpr uint32_t PAIR_SCAN_TIMEOUT_MS = 25000;
 constexpr uint32_t PAIR_SCAN_INTERVAL_MS = 20000;
 constexpr uint32_t PAIR_AFTER_LINK_LOSS_MS = 60000;
 
+// Сколько ждём подключения к одной сети DED_PAIR_*. Ограничение на всю попытку
+// задаёт PAIR_SCAN_TIMEOUT_MS: иначе перебор кандидатов растянул бы loop() на
+// минуты и модуль не отвечал бы ни порталу, ни WebSocket.
+constexpr uint32_t PAIR_CONNECT_TIMEOUT_MS = 8000;
+
 // Сколько занятых сетей видим в сканировании — столько и обходим.
 constexpr uint16_t WIFI_SCAN_LIMIT = 40;
 

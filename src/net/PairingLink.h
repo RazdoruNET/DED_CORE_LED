@@ -39,6 +39,7 @@ public:
   // из портала, когда ядро заменили).
   // pairCode — код из приложения блока; сеть сопряжения закрыта WPA2-паролем,
   // выведенным из него. Без кода сопряжение невозможно.
+  // timeoutMs — общий бюджет на перебор кандидатов, включая подключение.
   bool pair(CoreCredentials &out,
             const String &pairCode,
             const String &expectedBssid = String(),

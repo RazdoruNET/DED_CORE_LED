@@ -8,8 +8,10 @@
 #include "config/PROPS.h"
 
 bool CoreCredentials::valid() const {
+  // Токен — непрозрачное значение от ядра: жёсткая длина привязала бы прошивку
+  // к одной версии формата и ломала бы сопряжение при его смене.
   return ssid.length() > 0 && password.length() >= 8 && host.length() > 0 && port != 0 &&
-         token.length() == 16;
+         token.length() >= 8;
 }
 
 PairingLink &PairingLink::instance() {
@@ -30,13 +32,19 @@ bool PairingLink::pair(CoreCredentials &out, const String &pairCode,
 
   Serial.println("PAIR: ищем сеть сопряжения ядра");
 
-  const int maxCandidates = 16;
+  const int maxCandidates = WIFI_SCAN_LIMIT;
   String ssids[maxCandidates];
   String bssids[maxCandidates];
   int rssis[maxCandidates];
   int count = 0;
 
   const int found = WiFi.scanNetworks();
+
+  if (found < 0) {
+    WiFi.scanDelete();
+    Serial.println("PAIR: сканирование сетей не удалось");
+    return false;
+  }
 
   for (int i = 0; i < found && count < maxCandidates; ++i) {
     if (!WiFi.SSID(i).startsWith(PAIR_AP_PREFIX)) {
@@ -90,9 +98,22 @@ bool PairingLink::pair(CoreCredentials &out, const String &pairCode,
   String apBssid;
   bool connected = false;
 
-  const uint32_t perCandidateTimeout = timeoutMs < 8000 ? timeoutMs : 8000;
+  // Дедлайн на всё сопряжение, а не на одного кандидата: перебор сетей не должен
+  // держать loop() минутами.
+  const uint32_t connectStarted = millis();
 
   for (int candidate = 0; candidate < count && !connected; candidate++) {
+    const uint32_t spent = static_cast<uint32_t>(millis() - connectStarted);
+
+    if (spent >= timeoutMs) {
+      Serial.println("PAIR: общий таймаут сопряжения");
+      break;
+    }
+
+    const uint32_t left = timeoutMs - spent;
+    const uint32_t perCandidateTimeout =
+        left < PAIR_CONNECT_TIMEOUT_MS ? left : PAIR_CONNECT_TIMEOUT_MS;
+
     Serial.printf("PAIR: пробуем '%s' (%s)\n", ssids[candidate].c_str(), bssids[candidate].c_str());
 
     WiFi.begin(ssids[candidate].c_str(), pairCode.c_str());
