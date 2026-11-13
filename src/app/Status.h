@@ -8,10 +8,6 @@
 
 struct RuntimeStatus {
   bool linkOnline = false;
-  bool coreProvisioned = false;
-
-  String coreSsid;
-  String coreHost;
 
   // Номер активной карты из кадра ядра: 0…2. -1 — данных ещё не было.
   int card = -1;

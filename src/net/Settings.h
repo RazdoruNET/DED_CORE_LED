@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // Настройки модуля в NVS: к какому ядру подключаться и пароль обновления.
 //
@@ -20,24 +22,27 @@ public:
   bool nvsReady() const { return nvsReady_; }
 
   bool provisioned() const;
-  const String &ssid() const { return ssid_; }
-  const String &password() const { return password_; }
-  const String &host() const { return host_; }
-  uint16_t port() const { return port_; }
+
+  // Геттеры отдают копию под мьютексом: значения читает и loop(), и задача
+  // ESPAsyncWebServer, а String при переаллокации освобождает буфер.
+  String ssid() const;
+  String password() const;
+  String host() const;
+  uint16_t port() const;
 
   // Токен доверенного модуля: выдаётся при сопряжении, по нему ядро присылает
   // новые параметры сети при смене пароля точки доступа.
-  const String &token() const { return token_; }
+  String token() const;
   void saveToken(const String &token);
 
   // BSSID точки сопряжения ядра. По нему автоматическое пересопряжение находит
   // только своё ядро, а не любую сеть DED_PAIR_* в радиусе.
-  const String &bssid() const { return bssid_; }
+  String bssid() const;
   void saveBssid(const String &bssid);
 
   // Код сопряжения из приложения блока. Сеть DED_PAIR_* закрыта WPA2-паролем,
   // выведенным из этого кода: без него модуль не подключится и не получит пароль ядра.
-  const String &pairCode() const { return pairCode_; }
+  String pairCode() const;
   void savePairCode(const String &code);
 
   void saveCore(const String &ssid, const String &password, const String &host, uint16_t port);
@@ -51,9 +56,12 @@ public:
   const char *otaPassword() const { return otaPassword_; }
 
 private:
-  Settings() = default;
+  Settings();
 
   void load();
+
+  void lock() const;
+  void unlock() const;
 
   // Возвращает true, если значение действительно попало в NVS.
   bool storeString(const char *key, const String &value);
@@ -74,6 +82,9 @@ private:
   char otaPassword_[9] = {0};
 
   bool nvsReady_ = false;
+
+  // Рекурсивный: saveCore() вызывает setFailedBoots() внутри своей блокировки.
+  mutable SemaphoreHandle_t mutex_ = nullptr;
 
   // Кэш счётчика: NVS пишется только при изменении значения, иначе «мигающий»
   // линк изнашивал бы flash на каждом переходе в online.

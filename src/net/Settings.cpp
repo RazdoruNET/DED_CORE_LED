@@ -26,7 +26,25 @@ Settings &Settings::instance() {
   return settings;
 }
 
+Settings::Settings() {
+  mutex_ = xSemaphoreCreateRecursiveMutex();
+}
+
+void Settings::lock() const {
+  if (mutex_ != nullptr) {
+    xSemaphoreTakeRecursive(mutex_, portMAX_DELAY);
+  }
+}
+
+void Settings::unlock() const {
+  if (mutex_ != nullptr) {
+    xSemaphoreGiveRecursive(mutex_);
+  }
+}
+
 bool Settings::begin() {
+  lock();
+
   nvsReady_ = prefs_.begin(kNamespace, false);
 
   if (nvsReady_) {
@@ -49,6 +67,8 @@ bool Settings::begin() {
     Serial.printf("SETTINGS: пароль обновления прошивки: %s\n", otaPassword_);
   }
 
+  unlock();
+
   return nvsReady_;
 }
 
@@ -66,10 +86,64 @@ bool Settings::storeString(const char *key, const String &value) {
 }
 
 bool Settings::provisioned() const {
-  return ssid_.length() > 0 && password_.length() >= 8;
+  lock();
+  const bool result = ssid_.length() > 0 && password_.length() >= 8;
+  unlock();
+  return result;
+}
+
+String Settings::ssid() const {
+  lock();
+  const String value = ssid_;
+  unlock();
+  return value;
+}
+
+String Settings::password() const {
+  lock();
+  const String value = password_;
+  unlock();
+  return value;
+}
+
+String Settings::host() const {
+  lock();
+  const String value = host_;
+  unlock();
+  return value;
+}
+
+uint16_t Settings::port() const {
+  lock();
+  const uint16_t value = port_;
+  unlock();
+  return value;
+}
+
+String Settings::token() const {
+  lock();
+  const String value = token_;
+  unlock();
+  return value;
+}
+
+String Settings::bssid() const {
+  lock();
+  const String value = bssid_;
+  unlock();
+  return value;
+}
+
+String Settings::pairCode() const {
+  lock();
+  const String value = pairCode_;
+  unlock();
+  return value;
 }
 
 void Settings::saveCore(const String &ssid, const String &password, const String &host, uint16_t port) {
+  lock();
+
   ssid_ = ssid;
   password_ = password;
   host_ = host;
@@ -89,24 +163,34 @@ void Settings::saveCore(const String &ssid, const String &password, const String
 
   Serial.printf("SETTINGS: ядро '%s' (%s:%u) сохранено\n",
                 ssid_.c_str(), host_.c_str(), static_cast<unsigned>(port_));
+
+  unlock();
 }
 
 void Settings::saveToken(const String &token) {
+  lock();
   token_ = token;
   storeString(kKeyToken, token_);
+  unlock();
 }
 
 void Settings::saveBssid(const String &bssid) {
+  lock();
   bssid_ = bssid;
   storeString(kKeyBssid, bssid_);
+  unlock();
 }
 
 void Settings::savePairCode(const String &code) {
+  lock();
   pairCode_ = code;
   storeString(kKeyPairCode, pairCode_);
+  unlock();
 }
 
 void Settings::clearCore() {
+  lock();
+
   ssid_ = "";
   password_ = "";
   host_ = CORE_DEFAULT_HOST;
@@ -127,15 +211,19 @@ void Settings::clearCore() {
   setFailedBoots(0);
 
   Serial.println("SETTINGS: настройки ядра сброшены");
+
+  unlock();
 }
 
 void Settings::setFailedBoots(uint8_t value) {
-  if (value == failedBoots_) {
-    return;
+  lock();
+
+  if (value != failedBoots_) {
+    failedBoots_ = value;
+    prefs_.putUChar(kKeyFails, failedBoots_);
   }
 
-  failedBoots_ = value;
-  prefs_.putUChar(kKeyFails, failedBoots_);
+  unlock();
 }
 
 void Settings::load() {

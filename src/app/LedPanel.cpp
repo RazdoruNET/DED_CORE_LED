@@ -32,24 +32,22 @@ void LedPanel::begin() {
 }
 
 void LedPanel::setLinkOnline(bool online) {
-  online_ = online;
+  online_.store(online);
 
   if (!online) {
     // Связь потеряна: самопроверка больше не актуальна, а последняя карта
-    // неизвестно актуальна ли. Пины погасит update().
-    animating_ = false;
-    animStep_ = 0;
-    selfTestRequested_ = false;
+    // неизвестно актуальна ли. Состояние анимации меняет только update().
+    cancelAnim_.store(true);
   }
 }
 
 void LedPanel::setCard(int card) {
-  card_ = card;
+  card_.store(card);
   runtime.card = card;
 }
 
 void LedPanel::requestSelfTest() {
-  selfTestRequested_ = true;
+  selfTestRequested_.store(true);
 }
 
 void LedPanel::startSelfTest() {
@@ -67,9 +65,16 @@ void LedPanel::startSelfTest() {
 }
 
 void LedPanel::update() {
-  if (selfTestRequested_) {
-    selfTestRequested_ = false;
+  // exchange, а не load+store: запрос самопроверки из портала не должен
+  // потеряться между проверкой и сбросом флага.
+  if (selfTestRequested_.exchange(false)) {
     startSelfTest();
+  }
+
+  if (cancelAnim_.exchange(false)) {
+    animating_ = false;
+    animStep_ = 0;
+    selfTestRequested_.store(false);
   }
 
   if (!animating_) {
@@ -100,17 +105,19 @@ void LedPanel::update() {
 }
 
 void LedPanel::applyPins() {
-  if (!online_) {
+  if (!online_.load()) {
     allOff();
     return;
   }
 
-  if (card_ < CARD_MIN || card_ > CARD_MAX) {
+  const int card = card_.load();
+
+  if (card < CARD_MIN || card > CARD_MAX) {
     allOff();
     return;
   }
 
-  lightOnly(card_);
+  lightOnly(card);
 }
 
 void LedPanel::lightOnly(int index) {

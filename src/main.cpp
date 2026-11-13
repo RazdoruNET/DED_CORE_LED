@@ -61,10 +61,6 @@ void runPairing(bool explicitRequest) {
     return;
   }
 
-  runtime.coreProvisioned = true;
-  runtime.coreSsid = credentials.ssid;
-  runtime.coreHost = credentials.host;
-
   SetupPortal::instance().setPairingStatus("Ядро найдено: " + credentials.ssid + ". Перезагрузка…");
 
   delay(1500);
@@ -117,10 +113,6 @@ void applyCoreCredentials() {
   }
 
   Settings::instance().saveCore(ssid, password, host, port);
-
-  runtime.coreSsid = ssid;
-  runtime.coreHost = host;
-  runtime.coreProvisioned = true;
 
   WifiLink::instance().applyCredentials(ssid, password);
 
@@ -190,10 +182,6 @@ void setup() {
   // без сети и без портала настройки.
   const uint8_t failedBoots = settings.failedBoots();
   settings.setFailedBoots(static_cast<uint8_t>(failedBoots + 1));
-
-  runtime.coreProvisioned = settings.provisioned();
-  runtime.coreSsid = settings.ssid();
-  runtime.coreHost = settings.host();
 
   if (!settings.provisioned() || failedBoots >= PORTAL_AFTER_FAILED_BOOTS) {
     Serial.println("SETUP: открыт портал настройки");

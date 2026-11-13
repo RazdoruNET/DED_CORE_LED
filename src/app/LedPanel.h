@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 
+#include <atomic>
+
 // Панель из трёх светодиодов: горит ровно один — номер активной карты.
 //
 // Пины пишет только update() в задаче индикации: остальные методы меняют
@@ -38,12 +40,16 @@ private:
   void lightOnly(int index);
   void allOff();
 
-  bool online_ = false;
-  int card_ = -1;
+  // Связь с ядром и активная карта пишутся из loop() и из задачи портала, а
+  // читаются в задаче индикации: атомарные типы вместо гонки за обычные поля.
+  std::atomic<bool> online_{false};
+  std::atomic<int> card_{-1};
   int lit_ = -1;
 
-  volatile bool selfTestRequested_ = false;
+  std::atomic<bool> selfTestRequested_{false};
+  std::atomic<bool> cancelAnim_{false};
 
+  // Состояние самопроверки трогает только update() в задаче индикации.
   bool animating_ = false;
   uint8_t animStep_ = 0;
   unsigned long animAt_ = 0;

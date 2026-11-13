@@ -92,6 +92,29 @@ SetupPortal &SetupPortal::instance() {
   return portal;
 }
 
+SetupPortal::SetupPortal() {
+  statusMutex_ = xSemaphoreCreateRecursiveMutex();
+}
+
+void SetupPortal::lockStatus() const {
+  if (statusMutex_ != nullptr) {
+    xSemaphoreTakeRecursive(statusMutex_, portMAX_DELAY);
+  }
+}
+
+void SetupPortal::unlockStatus() const {
+  if (statusMutex_ != nullptr) {
+    xSemaphoreGiveRecursive(statusMutex_);
+  }
+}
+
+String SetupPortal::statusSnapshot() const {
+  lockStatus();
+  const String text = pairingStatus_;
+  unlockStatus();
+  return text;
+}
+
 void SetupPortal::begin() {
   if (!active_) {
     // AP+STA: портал может быть открыт, пока модуль уже подключён к ядру,
@@ -108,7 +131,7 @@ void SetupPortal::begin() {
     WiFi.softAP(PORTAL_AP_SSID);
 
     active_ = true;
-    pairingStatus_ = "";
+    setPairingStatus("");
 
     Serial.printf("SETUP: сеть '%s', страница http://%s/\n",
                   PORTAL_AP_SSID, WiFi.softAPIP().toString().c_str());
@@ -156,7 +179,9 @@ bool SetupPortal::takePairingRequest() {
 }
 
 void SetupPortal::setPairingStatus(const String &text) {
+  lockStatus();
   pairingStatus_ = text;
+  unlockStatus();
 }
 
 bool SetupPortal::allowRequest(AsyncWebServerRequest *request) const {
@@ -254,7 +279,7 @@ void SetupPortal::registerRoutes() {
     }
 
     Settings::instance().savePairCode(code);
-    pairingStatus_ = "Код сохранён. Теперь нажмите «Найти ядро сопряжением».";
+    setPairingStatus("Код сохранён. Теперь нажмите «Найти ядро сопряжением».");
 
     request->redirect("/");
   });
@@ -264,7 +289,7 @@ void SetupPortal::registerRoutes() {
       return;
     }
 
-    pairingStatus_ = "Ищу сеть сопряжения ядра…";
+    setPairingStatus("Ищу сеть сопряжения ядра…");
     pairingRequested_ = true;
     request->redirect("/");
   });
@@ -387,7 +412,7 @@ String SetupPortal::buildPage() const {
 
   if (pairingStatus_.length() > 0) {
     page += "<p class=\"note\">";
-    page += htmlEscape(pairingStatus_);
+    page += htmlEscape(statusSnapshot());
     page += "</p>";
   }
 

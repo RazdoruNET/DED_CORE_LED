@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // Портал настройки модуля.
 //
@@ -25,11 +27,15 @@ public:
   void setPairingStatus(const String &text);
 
 private:
-  SetupPortal() = default;
+  SetupPortal();
 
   void registerRoutes();
   String buildPage() const;
   String buildStatusJson() const;
+
+  void lockStatus() const;
+  void unlockStatus() const;
+  String statusSnapshot() const;
 
   // Маршруты настроек не отвечают, когда портал закрыт: сервер остаётся
   // слушать и после остановки точки доступа. Исключение — /update: его
@@ -42,7 +48,10 @@ private:
   bool active_ = false;
 
   bool pairingRequested_ = false;
+
+  // Статус пишет loop(), а читает задача ESPAsyncWebServer.
   String pairingStatus_;
+  mutable SemaphoreHandle_t statusMutex_ = nullptr;
 
   unsigned long restartAt_ = 0;
 };
