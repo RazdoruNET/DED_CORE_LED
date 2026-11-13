@@ -27,29 +27,42 @@ Settings &Settings::instance() {
 }
 
 bool Settings::begin() {
-  const bool nvsReady = prefs_.begin(kNamespace, false);
+  nvsReady_ = prefs_.begin(kNamespace, false);
 
-  if (nvsReady) {
+  if (nvsReady_) {
     load();
   } else {
-    Serial.println("SETTINGS: NVS недоступна");
+    Serial.println("SETTINGS: NVS недоступна, настройки не сохранятся");
   }
 
   // Пароль OTA не должен оставаться пустым даже при сбое NVS: ElegantOTA с
   // пустым паролем отключает авторизацию, а точка доступа портала открытая.
-  if (otaPassword_.length() == 0) {
-    otaPassword_ = makeOtaPassword();
+  if (otaPassword_[0] == '\0') {
+    makeOtaPassword(otaPassword_, sizeof(otaPassword_));
 
-    if (nvsReady) {
+    if (nvsReady_) {
       prefs_.putString(kKeyOtaPass, otaPassword_);
     }
 
     // Пароль печатаем один раз: портал открытый, а обновление прошивки —
     // единственное действие, которым можно испортить модуль.
-    Serial.printf("SETTINGS: пароль обновления прошивки: %s\n", otaPassword_.c_str());
+    Serial.printf("SETTINGS: пароль обновления прошивки: %s\n", otaPassword_);
   }
 
-  return nvsReady;
+  return nvsReady_;
+}
+
+bool Settings::storeString(const char *key, const String &value) {
+  if (!nvsReady_) {
+    return false;
+  }
+
+  if (prefs_.putString(key, value) > 0) {
+    return true;
+  }
+
+  Serial.printf("SETTINGS: '%s' не записался в NVS\n", key);
+  return false;
 }
 
 bool Settings::provisioned() const {
@@ -62,10 +75,16 @@ void Settings::saveCore(const String &ssid, const String &password, const String
   host_ = host;
   port_ = port;
 
-  prefs_.putString(kKeySsid, ssid_);
-  prefs_.putString(kKeyPass, password_);
-  prefs_.putString(kKeyHost, host_);
-  prefs_.putUShort(kKeyPort, port_);
+  // Проверяем запись: без неё сопряжение выглядело бы успешным, а после
+  // перезагрузки модуль снова оказывался бы ненастроенным.
+  const bool stored = storeString(kKeySsid, ssid_) && storeString(kKeyPass, password_) &&
+                      storeString(kKeyHost, host_) &&
+                      (nvsReady_ && prefs_.putUShort(kKeyPort, port_) > 0);
+
+  if (!stored) {
+    Serial.println("SETTINGS: параметры ядра не сохранены в NVS");
+  }
+
   setFailedBoots(0);
 
   Serial.printf("SETTINGS: ядро '%s' (%s:%u) сохранено\n",
@@ -74,17 +93,17 @@ void Settings::saveCore(const String &ssid, const String &password, const String
 
 void Settings::saveToken(const String &token) {
   token_ = token;
-  prefs_.putString(kKeyToken, token_);
+  storeString(kKeyToken, token_);
 }
 
 void Settings::saveBssid(const String &bssid) {
   bssid_ = bssid;
-  prefs_.putString(kKeyBssid, bssid_);
+  storeString(kKeyBssid, bssid_);
 }
 
 void Settings::savePairCode(const String &code) {
   pairCode_ = code;
-  prefs_.putString(kKeyPairCode, pairCode_);
+  storeString(kKeyPairCode, pairCode_);
 }
 
 void Settings::clearCore() {
@@ -99,6 +118,11 @@ void Settings::clearCore() {
   prefs_.remove(kKeyPort);
   prefs_.remove(kKeyBssid);
   bssid_ = "";
+
+  // Токен принадлежит прежнему ядру: с ним модуль представился бы новому блоку
+  // чужим пропуском и не получил бы смену параметров сети.
+  prefs_.remove(kKeyToken);
+  token_ = "";
 
   setFailedBoots(0);
 
@@ -119,11 +143,16 @@ void Settings::load() {
   password_ = prefs_.getString(kKeyPass, "");
   host_ = prefs_.getString(kKeyHost, CORE_DEFAULT_HOST);
   port_ = prefs_.getUShort(kKeyPort, CORE_DEFAULT_PORT);
-  otaPassword_ = prefs_.getString(kKeyOtaPass, "");
   token_ = prefs_.getString(kKeyToken, "");
   bssid_ = prefs_.getString(kKeyBssid, "");
   pairCode_ = prefs_.getString(kKeyPairCode, "");
   failedBoots_ = prefs_.getUChar(kKeyFails, 0);
+
+  const String storedOta = prefs_.getString(kKeyOtaPass, "");
+
+  if (storedOta.length() == sizeof(otaPassword_) - 1) {
+    memcpy(otaPassword_, storedOta.c_str(), sizeof(otaPassword_));
+  }
 
   if (host_.length() == 0) {
     host_ = CORE_DEFAULT_HOST;
@@ -134,16 +163,15 @@ void Settings::load() {
   }
 }
 
-String Settings::makeOtaPassword() {
+void Settings::makeOtaPassword(char *out, size_t size) {
   // Без похожих символов: пароль набирают вручную с экрана или из лога.
   static const char alphabet[] = "abcdefghijkmnpqrstuvwxyz23456789";
 
-  String password;
-  password.reserve(8);
+  const size_t length = size - 1;
 
-  for (int i = 0; i < 8; ++i) {
-    password += alphabet[esp_random() % (sizeof(alphabet) - 1)];
+  for (size_t i = 0; i < length; ++i) {
+    out[i] = alphabet[esp_random() % (sizeof(alphabet) - 1)];
   }
 
-  return password;
+  out[length] = '\0';
 }

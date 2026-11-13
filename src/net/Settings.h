@@ -15,6 +15,10 @@ public:
 
   bool begin();
 
+  // false — NVS не открылась: значения живут только до перезагрузки, и после
+  // рестарта сопряжённый модуль снова окажется ненастроенным.
+  bool nvsReady() const { return nvsReady_; }
+
   bool provisioned() const;
   const String &ssid() const { return ssid_; }
   const String &password() const { return password_; }
@@ -42,13 +46,19 @@ public:
   uint8_t failedBoots() const { return failedBoots_; }
   void setFailedBoots(uint8_t value);
 
-  const String &otaPassword() const { return otaPassword_; }
+  // Строка пароля OTA отдаётся указателем: ElegantOTA хранит его у себя и
+  // читает при каждом запросе, поэтому буфер не должен переаллоцироваться.
+  const char *otaPassword() const { return otaPassword_; }
 
 private:
   Settings() = default;
 
   void load();
-  static String makeOtaPassword();
+
+  // Возвращает true, если значение действительно попало в NVS.
+  bool storeString(const char *key, const String &value);
+
+  static void makeOtaPassword(char *out, size_t size);
 
   Preferences prefs_;
 
@@ -59,7 +69,11 @@ private:
   String token_;
   String bssid_;
   String pairCode_;
-  String otaPassword_;
+
+  // 8 символов + NUL: столько же, сколько генерирует makeOtaPassword().
+  char otaPassword_[9] = {0};
+
+  bool nvsReady_ = false;
 
   // Кэш счётчика: NVS пишется только при изменении значения, иначе «мигающий»
   // линк изнашивал бы flash на каждом переходе в online.

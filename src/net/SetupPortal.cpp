@@ -228,6 +228,14 @@ void SetupPortal::registerRoutes() {
                       host.length() > 0 ? host : String(CORE_DEFAULT_HOST),
                       port);
 
+    // Неподтверждённая запись в NVS: перезагрузка стёрла бы всё, что человек
+    // только что ввёл, и модуль молча вернулся бы к прежним настройкам.
+    if (!settings.nvsReady()) {
+      request->send(500, "text/html; charset=utf-8",
+                    htmlMessage("NVS недоступна: настройки не сохранятся после перезагрузки."));
+      return;
+    }
+
     request->send(200, "text/html; charset=utf-8", htmlMessage("Сохранено. Перезагрузка…"));
     restartAt_ = millis() + 1500;
   });
@@ -292,7 +300,7 @@ void SetupPortal::registerRoutes() {
   // Обновление прошивки закрыто паролем из NVS: точка доступа портала открытая.
   // Маршрут /update регистрирует ElegantOTA, поэтому он отвечает и после
   // закрытия портала — из сети ядра, но только с паролем.
-  ElegantOTA.begin(&server_, "admin", Settings::instance().otaPassword().c_str());
+  ElegantOTA.begin(&server_, "admin", Settings::instance().otaPassword());
 }
 
 String SetupPortal::buildPage() const {
