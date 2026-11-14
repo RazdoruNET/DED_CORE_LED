@@ -54,6 +54,12 @@ private:
   mutable SemaphoreHandle_t statusMutex_ = nullptr;
 
   unsigned long restartAt_ = 0;
+  unsigned long stopAt_ = 0;
+
+  // Момент, когда связь с ядром появилась: от него отсчитывается
+  // PORTAL_CLOSE_AFTER_LINK_MS.
+  unsigned long linkOnlineAt_ = 0;
+  bool linkWasOnline_ = false;
 };
 
 #endif // NET_SETUP_PORTAL_H

@@ -51,4 +51,8 @@ constexpr uint16_t WIFI_SCAN_LIMIT = 40;
 // случайные перезагрузки не должны открывать точку доступа.
 constexpr uint8_t PORTAL_AFTER_FAILED_BOOTS = 10;
 
+// Сколько портал живёт после восстановления связи. Закрывать сразу нельзя:
+// человек может в этот момент править настройки на странице портала.
+constexpr uint32_t PORTAL_CLOSE_AFTER_LINK_MS = 120000;
+
 #endif // CONFIG_CONFIG_H

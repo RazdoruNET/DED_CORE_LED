@@ -85,6 +85,23 @@ String cardText(int card) {
   return String(card + 1);
 }
 
+// Код вводят вручную и копируют из приложения: пробелы и переводы строки иначе
+// попали бы в WPA2-пароль сети сопряжения и код перестал бы подходить.
+String normalizedPairCode(const String &raw) {
+  String code;
+  code.reserve(raw.length());
+
+  for (size_t i = 0; i < raw.length(); ++i) {
+    const char c = raw[i];
+
+    if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+      code += c;
+    }
+  }
+
+  return code;
+}
+
 }  // namespace
 
 SetupPortal &SetupPortal::instance() {
@@ -133,6 +150,9 @@ void SetupPortal::begin() {
     active_ = true;
     setPairingStatus("");
 
+    linkOnlineAt_ = runtime.linkOnline ? millis() : 0;
+    linkWasOnline_ = runtime.linkOnline;
+
     Serial.printf("SETUP: сеть '%s', страница http://%s/\n",
                   PORTAL_AP_SSID, WiFi.softAPIP().toString().c_str());
   }
@@ -151,13 +171,45 @@ void SetupPortal::stop() {
 
   WiFi.softAPdisconnect(true);
   active_ = false;
+  linkOnlineAt_ = 0;
+
+  // Обратно в STA: точку доступа портала больше никто не использует.
+  if (WiFi.getMode() == WIFI_AP_STA) {
+    WiFi.mode(WIFI_STA);
+  }
 
   Serial.println("SETUP: портал закрыт");
 }
 
 void SetupPortal::loop() {
   // Обновление прошивки перезагружает модуль само, но только из этого вызова.
-  ElegantOTA.loop();
+  if (started_) {
+    ElegantOTA.loop();
+  }
+
+  // Закрытие по /close: ответ должен уйти до остановки точки доступа.
+  if (stopAt_ != 0 && static_cast<int32_t>(millis() - stopAt_) >= 0) {
+    stopAt_ = 0;
+    stop();
+  }
+
+  // Связь восстановилась — портал больше не нужен, но закрываем его не сразу:
+  // человек может в этот момент вводить пароль ядра на странице.
+  const bool online = runtime.linkOnline;
+
+  if (online && !linkWasOnline_) {
+    linkOnlineAt_ = millis();
+  } else if (!online) {
+    linkOnlineAt_ = 0;
+  }
+
+  linkWasOnline_ = online;
+
+  if (active_ && linkOnlineAt_ != 0 &&
+      static_cast<uint32_t>(millis() - linkOnlineAt_) >= PORTAL_CLOSE_AFTER_LINK_MS) {
+    Serial.println("SETUP: связь с ядром есть — закрываю портал");
+    stop();
+  }
 
   if (restartAt_ != 0 && static_cast<int32_t>(millis() - restartAt_) >= 0) {
     Serial.println("SETUP: перезагрузка по настройкам портала");
@@ -270,11 +322,11 @@ void SetupPortal::registerRoutes() {
       return;
     }
 
-    const String code = formParam(request, "code");
+    const String code = normalizedPairCode(formParam(request, "code"));
 
-    if (code.length() < 8) {
+    if (code.length() < 8 || code.length() > 32) {
       request->send(400, "text/html; charset=utf-8",
-                    htmlMessage("Код сопряжения слишком короткий."));
+                    htmlMessage("Код сопряжения: от 8 до 32 символов без пробелов."));
       return;
     }
 
@@ -284,7 +336,9 @@ void SetupPortal::registerRoutes() {
     request->redirect("/");
   });
 
-  server_.on("/pair", HTTP_GET, [this](AsyncWebServerRequest *request) {
+  // POST, а не GET: это действие меняет состояние модуля, а GET дёргают
+  // предзагрузка ссылок и чужая страница в браузере.
+  server_.on("/pair", HTTP_POST, [this](AsyncWebServerRequest *request) {
     if (!allowRequest(request)) {
       return;
     }
@@ -294,7 +348,7 @@ void SetupPortal::registerRoutes() {
     request->redirect("/");
   });
 
-  server_.on("/led/test", HTTP_GET, [this](AsyncWebServerRequest *request) {
+  server_.on("/led/test", HTTP_POST, [this](AsyncWebServerRequest *request) {
     if (!allowRequest(request)) {
       return;
     }
@@ -319,7 +373,10 @@ void SetupPortal::registerRoutes() {
     }
 
     request->send(200, "text/html; charset=utf-8", htmlMessage("Портал закрыт."));
-    stop();
+
+    // Останавливаем точку доступа не в обработчике: иначе ответ обрывается
+    // вместе с соединением.
+    stopAt_ = millis() + 300;
   });
 
   // Обновление прошивки закрыто паролем из NVS: точка доступа портала открытая.
@@ -403,8 +460,10 @@ String SetupPortal::buildPage() const {
   page += "<input name=\"code\" type=\"password\" autocomplete=\"off\" placeholder=\"Код сопряжения из приложения блока\">";
   page += "<button type=\"submit\">Сохранить код</button></form>";
 
-  page += "<a class=\"btn\" href=\"/pair\">Найти ядро сопряжением</a>";
-  page += "<a class=\"btn ghost\" href=\"/led/test\">Проверить светодиоды</a>";
+  page += "<form method=\"post\" action=\"/pair\">";
+  page += "<button type=\"submit\">Найти ядро сопряжением</button></form>";
+  page += "<form method=\"post\" action=\"/led/test\">";
+  page += "<button class=\"ghost\" type=\"submit\">Проверить светодиоды</button></form>";
   page += "<a class=\"btn ghost\" href=\"/update\">Обновление прошивки</a>";
 
   page += "<form method=\"post\" action=\"/reset\" onsubmit=\"return confirm('Сбросить настройки ядра?')\">";

@@ -135,10 +135,8 @@ void updateLinkState() {
     Serial.println("CORE: телеметрия пошла");
     Settings::instance().setFailedBoots(0);
 
-    // Линк есть — открытая точка доступа портала больше не нужна.
-    if (SetupPortal::instance().active()) {
-      SetupPortal::instance().stop();
-    }
+    // Портал закроется сам через PORTAL_CLOSE_AFTER_LINK_MS: страницу могли
+    // открыть для настройки, и обрывать её сразу после линка нельзя.
   } else {
     Serial.println("CORE: кадров нет, светодиоды погашены");
   }
