@@ -141,7 +141,7 @@ String Settings::pairCode() const {
   return value;
 }
 
-void Settings::saveCore(const String &ssid, const String &password, const String &host, uint16_t port) {
+bool Settings::saveCore(const String &ssid, const String &password, const String &host, uint16_t port) {
   lock();
 
   ssid_ = ssid;
@@ -165,6 +165,8 @@ void Settings::saveCore(const String &ssid, const String &password, const String
                 ssid_.c_str(), host_.c_str(), static_cast<unsigned>(port_));
 
   unlock();
+
+  return stored;
 }
 
 void Settings::saveToken(const String &token) {

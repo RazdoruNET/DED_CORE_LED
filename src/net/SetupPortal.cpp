@@ -296,16 +296,16 @@ void SetupPortal::registerRoutes() {
       return;
     }
 
-    settings.saveCore(ssid,
-                      storedPassword,
-                      host.length() > 0 ? host : String(CORE_DEFAULT_HOST),
-                      port);
-
     // Неподтверждённая запись в NVS: перезагрузка стёрла бы всё, что человек
     // только что ввёл, и модуль молча вернулся бы к прежним настройкам.
-    if (!settings.nvsReady()) {
+    const bool stored = settings.saveCore(ssid,
+                                         storedPassword,
+                                         host.length() > 0 ? host : String(CORE_DEFAULT_HOST),
+                                         port);
+
+    if (!stored) {
       request->send(500, "text/html; charset=utf-8",
-                    htmlMessage("NVS недоступна: настройки не сохранятся после перезагрузки."));
+                    htmlMessage("Настройки не сохранились в NVS. Перезагрузка их стёрла бы."));
       return;
     }
 

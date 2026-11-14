@@ -46,16 +46,16 @@ void runPairing(bool explicitRequest) {
     return;
   }
 
-  settings.saveCore(credentials.ssid,
-                    credentials.password,
-                    credentials.host,
-                    credentials.port);
+  const bool stored = settings.saveCore(credentials.ssid,
+                                        credentials.password,
+                                        credentials.host,
+                                        credentials.port);
   settings.saveToken(credentials.token);
   settings.saveBssid(credentials.bssid);
 
   // Без NVS перезагрузка стёрла бы только что полученные параметры, и модуль
   // бесконечно ходил бы по кругу «сопрягся — перезагрузился — снова не настроен».
-  if (!settings.nvsReady()) {
+  if (!stored || !settings.nvsReady()) {
     SetupPortal::instance().setPairingStatus(
         "Ядро найдено, но NVS недоступна: параметры не сохранятся. Модуль "
         "остался в портале настройки.");

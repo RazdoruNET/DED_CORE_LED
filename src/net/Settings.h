@@ -45,7 +45,8 @@ public:
   String pairCode() const;
   void savePairCode(const String &code);
 
-  void saveCore(const String &ssid, const String &password, const String &host, uint16_t port);
+  // false — параметры не попали в NVS и после перезагрузки пропадут.
+  bool saveCore(const String &ssid, const String &password, const String &host, uint16_t port);
   void clearCore();
 
   uint8_t failedBoots() const { return failedBoots_; }
