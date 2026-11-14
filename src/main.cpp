@@ -17,6 +17,7 @@ RuntimeStatus runtime;
 namespace {
 
 unsigned long g_pairAttemptAt = 0;
+bool g_pairAttemptDone = false;
 unsigned long g_wifiDownSince = 0;
 
 // explicitRequest — запуск из портала: ищем любое ядро. Автоматически после
@@ -78,7 +79,8 @@ void schedulePairing() {
     return;
   }
 
-  if (g_pairAttemptAt != 0 && static_cast<uint32_t>(now - g_pairAttemptAt) < PAIR_SCAN_INTERVAL_MS) {
+  if (g_pairAttemptDone &&
+      static_cast<uint32_t>(now - g_pairAttemptAt) < PAIR_SCAN_INTERVAL_MS) {
     return;
   }
 
@@ -96,6 +98,7 @@ void schedulePairing() {
     return;
   }
 
+  g_pairAttemptDone = true;
   g_pairAttemptAt = now;
   runPairing(false);
 }

@@ -217,10 +217,6 @@ void SetupPortal::loop() {
   }
 }
 
-void SetupPortal::requestPairing() {
-  pairingRequested_ = true;
-}
-
 bool SetupPortal::takePairingRequest() {
   if (!pairingRequested_) {
     return false;
@@ -423,6 +419,10 @@ String SetupPortal::buildPage() const {
   page += String(settings.port());
   page += "</td></tr>";
 
+  page += "<tr><td>Хранилище настроек</td><td>";
+  page += (settings.nvsReady() ? String("NVS") : String("NVS недоступна"));
+  page += "</td></tr>";
+
   page += "<tr><td>Мой адрес</td><td>";
   page += (WifiLink::instance().isConnected() ? WifiLink::instance().ip() : String("—"));
   page += "</td></tr>";
@@ -499,6 +499,7 @@ String SetupPortal::buildStatusJson() const {
   json += "\"link\":" + String(runtime.linkOnline ? 1 : 0) + ",";
   json += "\"core_ssid\":\"" + jsonEscape(settings.ssid()) + "\",";
   json += "\"core_host\":\"" + jsonEscape(settings.host()) + "\",";
+  json += "\"nvs\":" + String(settings.nvsReady() ? 1 : 0) + ",";
   json += "\"card\":" + String(runtime.card) + ",";
   json += "\"led\":" + String(runtime.litIndex) + ",";
   json += "\"frames\":" + String(runtime.frames);

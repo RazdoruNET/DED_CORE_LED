@@ -32,7 +32,6 @@ public:
   void rebind();
 
   bool started() const { return started_; }
-  bool connected();
   const CoreTelemetry &telemetry() const { return telemetry_; }
 
   // Новые параметры сети, присланные ядром. true — ровно один раз на кадр.

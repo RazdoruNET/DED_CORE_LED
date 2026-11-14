@@ -194,6 +194,7 @@ HTTP без `X-Device-Key`, ни в кадре телеметрии. Модул�
     "link": 1,
     "core_ssid": "DED_BOX_V4",
     "core_host": "192.168.4.1",
+    "nvs": 1,
     "card": 0,
     "led": 0,
     "frames": 15230

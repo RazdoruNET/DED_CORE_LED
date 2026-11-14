@@ -64,10 +64,6 @@ void CoreLink::rebind() {
   telemetry_.valid = false;
 }
 
-bool CoreLink::connected() {
-  return socket_.isConnected();
-}
-
 bool CoreLink::frameFresh(uint32_t timeoutMs) const {
   return telemetry_.valid && static_cast<uint32_t>(millis() - telemetry_.lastFrameMs) <= timeoutMs;
 }

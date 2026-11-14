@@ -22,7 +22,6 @@ public:
 
   bool active() const { return active_; }
 
-  void requestPairing();
   bool takePairingRequest();
   void setPairingStatus(const String &text);
 
